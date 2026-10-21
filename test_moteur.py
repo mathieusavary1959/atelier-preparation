@@ -3,9 +3,17 @@
 Lancer : python3 test_moteur.py"""
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import moteur
+
+# Le test travaille dans un dossier temporaire pour ne jamais toucher
+# à l'index réel de l'application.
+_tmp = tempfile.mkdtemp()
+moteur.DOSSIER = _tmp
+moteur.FICHIER_INDEX = os.path.join(_tmp, "index.json")
+moteur.DOSSIER_DOCS = os.path.join(_tmp, "documents")
 
 PDF = os.path.expanduser("~/workspace/your_files/cahier-histoire-1/cahier1-eleve.pdf")
 

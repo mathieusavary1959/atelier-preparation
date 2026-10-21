@@ -1,54 +1,49 @@
-# Atelier de préparation
+# Le Classeur
 
-Ton espace personnel pour travailler avec une IA ancrée dans tes documents
-de cours. Pour toi seulement, pas pour les élèves.
+L'espace personnel de préparation de Mathieu : trois espaces séparés
+(Histoire sec. 4, Monde contemporain, Éducation financière), des documents
+ancrés, un clavardage qui répond à partir de ses documents.
 
-## Ce que ça fait
+Décisions de design : voir CAHIER-DES-CHARGES.md (séries 1 et 2,
+choix de Mathieu du 20 octobre 2026). En résumé : thème clair, icônes,
+barre latérale à gauche, tableau de bord à l'accueil, aucun historique
+conservé d'une visite à l'autre.
 
-- Tu déposes tes documents (PDF, Word, texte) par thème.
-- Ils sont lus et indexés une fois. Ensuite, tu poses des questions et
-  l'application répond à partir de tes documents, en citant la page source.
-- Onglet Actions rapides : résumé de la matière, questions de compréhension,
-  points clés à enseigner.
-- Onglet Règles permanentes : tes standards (difficulté, vocabulaire simple,
-  noir typographique, etc.), appliqués à chaque demande du mode IA.
+## Contenu d'un espace de matière
+- Clavardage : questions sur les documents de la matière, sources citées,
+  bouton de recherche web, exportation Word et PDF de chaque réponse.
+- Documents : dépôt en lot, liste avec icônes, retrait.
+- Lire : le document à l'écran, page par page (précédent, suivant, numéro).
+- Outils : examens et corrigés (gabarits par matière), questionnaire de
+  visionnement (lien vidéo ou remise au format), banque de questions
+  classée par chapitre d'origine, aide-mémoire depuis les notes.
+- Liens : liens utiles de la matière, repris dans la barre latérale.
 
 ## Deux modes de réponse
+1. Mode documentaire (par défaut, gratuit) : réponses assemblées avec les
+   phrases exactes des documents, pages citées. Recherche et citation,
+   pas de rédaction.
+2. Mode IA (optionnel) : avec une clé API (Anthropic ou OpenAI) dans les
+   secrets, le modèle rédige à partir des extraits et des règles
+   permanentes. Décision du 20 octobre 2026 : pas de clé pour l'instant.
 
-1. Mode documentaire (actif par défaut, gratuit) : les réponses sont
-   assemblées avec les phrases exactes de tes documents. Aucune invention,
-   mais pas de rédaction : c'est de la recherche sourcée.
-2. Mode IA (optionnel) : avec une clé API à ton nom (Anthropic ou OpenAI,
-   coût à l'usage), le modèle rédige de vraies réponses et productions
-   à partir des extraits trouvés et de tes règles. C'est ce mode qui
-   rapproche l'atelier de ton environnement Muse habituel.
-
-## Démarrer sur ton poste
-
-1. Installer Python, puis : pip install -r requirements.txt
-2. Lancer : streamlit run app.py
-3. Mot de passe temporaire : preparation
-   (à changer avant tout déploiement : variable ATELIER_MDP ou secret
-   Streamlit « mot_de_passe »)
-
-## Pour le mode IA
-
-Définir la variable d'environnement ANTHROPIC_API_KEY (ou OPENAI_API_KEY)
-avant de lancer, ou la mettre dans les secrets Streamlit au déploiement.
-Le modèle se choisit avec ATELIER_MODELE si besoin.
+## Démarrer
+- En ligne : https://atelier-preparation.streamlit.app/ (mot de passe
+  en secret Streamlit « mot_de_passe »).
+- En local : pip install -r requirements.txt, puis streamlit run app.py.
+  Mot de passe temporaire : preparation (variable ATELIER_MDP).
 
 ## Fichiers
+- app.py : l'interface du Classeur
+- moteur.py : extraction, indexation, recherche, banque, fiches, exports
+- regles.py : les règles permanentes par défaut
+- CAHIER-DES-CHARGES.md : toutes les décisions de design
+- donnees/ : documents déposés et index (jamais poussé sur GitHub)
+- test_moteur.py : vérifie le moteur (dossier temporaire, sans danger)
 
-- app.py : l'interface
-- moteur.py : extraction, indexation et recherche dans les documents
-- regles.py : tes règles par défaut
-- donnees/ : tes documents déposés et l'index (créé au premier dépôt)
-- test_moteur.py : vérifie le moteur avec le cahier d'Histoire 1
-
-## État de la maquette
-
-Démonstration déjà chargée : notes d'Études (22 pages) et cahier
-d'Histoire 1 (16 pages). Vérifiée le 20 octobre 2026 : extraction,
-recherche et citations fonctionnels.
-Étape suivante possible : déploiement privé (Streamlit Cloud, mot de
-passe) pour y accéder de l'école et de la maison.
+## Limites connues
+- Sur Streamlit Cloud, les documents déposés disparaissent au redémarrage
+  de l'application (stockage permanent à ajouter si l'usage le justifie).
+- La recherche web intégrée peut être bloquée par les moteurs sur les
+  réseaux de centre de données ; le bouton Google direct fonctionne
+  toujours.

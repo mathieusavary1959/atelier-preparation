@@ -16,7 +16,21 @@ from collections import Counter
 
 DOSSIER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "donnees")
 FICHIER_INDEX = os.path.join(DOSSIER, "index.json")
+FICHIER_LIENS = os.path.join(DOSSIER, "liens.json")
 DOSSIER_DOCS = os.path.join(DOSSIER, "documents")
+
+MATIERES = ["Histoire sec. 4", "Monde contemporain", "Éducation financière"]
+
+
+def matiere_depuis_theme(theme):
+    t = plier(theme or "")
+    if t.startswith("histoire"):
+        return "Histoire sec. 4"
+    if t.startswith("monde"):
+        return "Monde contemporain"
+    if t.startswith("education") or t.startswith("financ"):
+        return "Éducation financière"
+    return "Monde contemporain"
 
 MOTS_VIDES = set("""
 le la les de des du un une et est sont au aux en dans sur par pour avec sans
@@ -73,7 +87,7 @@ def extraire_pages(nom, octets):
     raise ValueError("Format non pris en charge : " + nom)
 
 
-def decouper(nom_doc, theme, pages, taille=1200, chevauchement=150):
+def decouper(nom_doc, theme, pages, taille=1200, chevauchement=150, matiere=None):
     """Découpe le texte en extraits repérables (document, page)."""
     extraits = []
     for page, texte in pages:
@@ -84,6 +98,7 @@ def decouper(nom_doc, theme, pages, taille=1200, chevauchement=150):
             extraits.append({
                 "doc": nom_doc,
                 "theme": theme,
+                "matiere": matiere or matiere_depuis_theme(theme),
                 "page": page,
                 "texte": texte[debut:fin],
             })
@@ -97,8 +112,19 @@ def decouper(nom_doc, theme, pages, taille=1200, chevauchement=150):
 def charger_index():
     if os.path.exists(FICHIER_INDEX):
         with open(FICHIER_INDEX, encoding="utf-8") as f:
-            return json.load(f)
-    return {"documents": [], "extraits": []}
+            index = json.load(f)
+    else:
+        index = {"documents": [], "extraits": []}
+    # Migration : les anciens index n'ont pas de matière
+    for d in index["documents"]:
+        if "matiere" not in d:
+            d["matiere"] = matiere_depuis_theme(d.get("theme", ""))
+        if "ajoute_le" not in d:
+            d["ajoute_le"] = ""
+    for e in index["extraits"]:
+        if "matiere" not in e:
+            e["matiere"] = matiere_depuis_theme(e.get("theme", ""))
+    return index
 
 
 def sauver_index(index):
@@ -107,19 +133,22 @@ def sauver_index(index):
         json.dump(index, f, ensure_ascii=False)
 
 
-def ajouter_document(index, nom, theme, octets):
+def ajouter_document(index, nom, theme, octets, matiere=None):
+    import datetime
+    matiere = matiere or matiere_depuis_theme(theme)
     os.makedirs(DOSSIER_DOCS, exist_ok=True)
     chemin = os.path.join(DOSSIER_DOCS, nom)
     with open(chemin, "wb") as f:
         f.write(octets)
     pages = extraire_pages(nom, octets)
-    nouveaux = decouper(nom, theme, pages)
+    nouveaux = decouper(nom, theme, pages, matiere=matiere)
     index["extraits"] = [e for e in index["extraits"] if e["doc"] != nom]
     index["extraits"].extend(nouveaux)
     index["documents"] = [d for d in index["documents"] if d["nom"] != nom]
     index["documents"].append({
-        "nom": nom, "theme": theme,
+        "nom": nom, "theme": theme, "matiere": matiere,
         "pages": len(pages), "extraits": len(nouveaux),
+        "ajoute_le": datetime.date.today().isoformat(),
     })
     sauver_index(index)
     return len(pages), len(nouveaux)
@@ -135,12 +164,14 @@ def retirer_document(index, nom):
 
 
 # ---------------------------------------------------------------- recherche
-def rechercher(index, question, k=5, theme=None):
+def rechercher(index, question, k=5, theme=None, matiere=None):
     """Score de pertinence maison (fréquence des termes, rareté dans le fonds)."""
     q = Counter(jetons(question))
     if not q or not index["extraits"]:
         return []
-    fonds = [e for e in index["extraits"] if theme in (None, "Tous", e["theme"])]
+    fonds = [e for e in index["extraits"]
+             if theme in (None, "Tous", e["theme"])
+             and matiere in (None, e.get("matiere"))]
     n = max(len(fonds), 1)
     df = Counter()
     for e in fonds:
@@ -234,3 +265,133 @@ def texte_pages(nom):
         return []
     with open(chemin, "rb") as f:
         return extraire_pages(nom, f.read())
+
+
+# ---------------------------------------------------------------- liens (barre latérale)
+def charger_liens():
+    if os.path.exists(FICHIER_LIENS):
+        with open(FICHIER_LIENS, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def sauver_liens(liens):
+    os.makedirs(DOSSIER, exist_ok=True)
+    with open(FICHIER_LIENS, "w", encoding="utf-8") as f:
+        json.dump(liens, f, ensure_ascii=False)
+
+
+def ajouter_lien(liens, matiere, theme, titre, url):
+    liens.append({"matiere": matiere, "theme": theme, "titre": titre, "url": url})
+    sauver_liens(liens)
+
+
+def retirer_lien(liens, cible):
+    liens.remove(cible)
+    sauver_liens(liens)
+
+
+# ---------------------------------------------------------------- recherche web
+def recherche_web(question, n=5):
+    """Recherche web affichée dans l'app (moteur DuckDuckGo, sans clé).
+    Retourne une liste de {titre, url, extrait}. En cas d'échec, liste vide
+    et l'interface propose le lien Google direct."""
+    import urllib.parse
+    import urllib.request
+    url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(question)
+    requete = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(requete, timeout=15) as r:
+            html = r.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return []
+    resultats = []
+    for bloc in re.findall(r'class="result__a" href="([^"]+)".*?>(.*?)</a>', html, re.S):
+        lien, titre = bloc
+        if "uddg=" in lien:
+            lien = urllib.parse.unquote(lien.split("uddg=")[1].split("&")[0])
+        titre = re.sub(r"<[^>]+>", "", titre).strip()
+        if titre and lien.startswith("http"):
+            resultats.append({"titre": titre, "url": lien, "extrait": ""})
+        if len(resultats) >= n:
+            break
+    extraits = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html, re.S)
+    for i, e in enumerate(extraits[:len(resultats)]):
+        resultats[i]["extrait"] = re.sub(r"<[^>]+>", "", e).strip()
+    return resultats
+
+
+# ---------------------------------------------------------------- banque de questions
+def extraire_questions(index, matiere):
+    """Repère les questions (phrases en ?) dans les documents d'une matière
+    et les classe par chapitre (thème du document d'origine)."""
+    banque = {}
+    vues = set()
+    for e in index["extraits"]:
+        if e.get("matiere") != matiere:
+            continue
+        for phrase in re.split(r"(?<=[.!?])\s+", e["texte"]):
+            phrase = phrase.strip()
+            if phrase.endswith("?") and 20 <= len(phrase) <= 300:
+                cle = plier(phrase)
+                if cle in vues:
+                    continue
+                vues.add(cle)
+                banque.setdefault(e["theme"], []).append({
+                    "question": phrase, "doc": e["doc"], "page": e["page"],
+                })
+    return banque
+
+
+# ---------------------------------------------------------------- aide-mémoire
+def fiche_depuis_document(index, nom_doc):
+    """Fiche synthèse extractive : pour chaque page, les énoncés les plus
+    denses en contenu (phrases longues et informatives), sans rédaction."""
+    pages = {}
+    for e in index["extraits"]:
+        if e["doc"] == nom_doc:
+            pages.setdefault(e["page"], []).append(e["texte"])
+    lignes = [f"FICHE SYNTHÈSE : {nom_doc}", ""]
+    for page in sorted(pages):
+        texte = " ".join(pages[page])
+        phrases = [p.strip() for p in re.split(r"(?<=[.!?])\s+", texte)
+                   if 60 <= len(p.strip()) <= 320]
+        phrases.sort(key=lambda p: -len(set(jetons(p))))
+        lignes.append(f"Page {page}")
+        for p in phrases[:2]:
+            lignes.append("- " + p)
+        lignes.append("")
+    return "\n".join(lignes)
+
+
+# ---------------------------------------------------------------- exports
+def exporter_docx(titre, texte):
+    import docx
+    doc = docx.Document()
+    doc.add_heading(titre, level=1)
+    for ligne in texte.split("\n"):
+        if ligne.strip():
+            doc.add_paragraph(ligne)
+    tampon = io.BytesIO()
+    doc.save(tampon)
+    return tampon.getvalue()
+
+
+def exporter_pdf(titre, texte):
+    import fitz
+    doc = fitz.open()
+    page = doc.new_page()
+    y = 56
+    page.insert_text((56, y), titre[:80], fontsize=15)
+    y += 26
+    for ligne in texte.split("\n"):
+        for morceau in [ligne[i:i + 95] for i in range(0, max(len(ligne), 1), 95)]:
+            if y > 780:
+                page = doc.new_page()
+                y = 56
+            page.insert_text((56, y), morceau, fontsize=10.5)
+            y += 15
+        y += 3
+    octets = doc.tobytes()
+    doc.close()
+    return octets
