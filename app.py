@@ -158,7 +158,7 @@ with st.sidebar:
 
 # ------------------------------------------------------------------ zone principale
 st.title("Atelier de préparation")
-onglets = st.tabs(["Clavardage", "Actions rapides", "Règles permanentes"])
+onglets = st.tabs(["Clavardage", "Lire un document", "Actions rapides", "Règles permanentes"])
 
 with onglets[0]:
     for m in st.session_state["messages"]:
@@ -176,6 +176,31 @@ with onglets[0]:
                            file_name="echange-atelier.md")
 
 with onglets[1]:
+    if not index["documents"]:
+        st.write("Dépose d'abord un document dans la barre latérale.")
+    else:
+        noms = [d["nom"] for d in index["documents"]]
+        choix = st.selectbox("Document à ouvrir", noms, key="doc_lecture")
+        n_pdf = moteur.nombre_pages_pdf(choix)
+        if n_pdf:
+            page = st.number_input(f"Page (1 à {n_pdf})", min_value=1,
+                                   max_value=n_pdf, value=1, step=1,
+                                   key="page_" + choix)
+            image = moteur.image_page_pdf(choix, int(page))
+            if image:
+                st.image(image, caption=f"{choix} · page {int(page)} sur {n_pdf}",
+                         use_container_width=True)
+        else:
+            pages = moteur.texte_pages(choix)
+            if pages:
+                numeros = [p for p, _ in pages]
+                page = st.selectbox("Bloc", numeros, key="bloc_" + choix)
+                texte = dict(pages)[page]
+                st.write(texte)
+            else:
+                st.write("Document introuvable sur le serveur.")
+
+with onglets[2]:
     st.write("Ces actions interrogent le thème sélectionné dans la barre latérale.")
     b1, b2, b3 = st.columns(3)
     if b1.button("Résumer la matière"):
@@ -192,7 +217,7 @@ with onglets[1]:
                  "et quelles confusions d'élèves faut-il prévenir ?", theme_choisi)
         st.rerun()
 
-with onglets[2]:
+with onglets[3]:
     nouvelles = st.text_area("Tes règles, appliquées à chaque demande du mode IA",
                              value=regles_actuelles, height=380)
     if st.button("Enregistrer les règles"):

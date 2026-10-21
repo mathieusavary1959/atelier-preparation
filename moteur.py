@@ -194,3 +194,43 @@ def reponse_documentaire(question, resultats):
     lignes.append("")
     lignes.append("Sources : " + " ; ".join(sources))
     return "\n".join(lignes)
+
+
+# ---------------------------------------------------------------- lecture à l'écran
+def chemin_document(nom):
+    return os.path.join(DOSSIER_DOCS, nom)
+
+
+def nombre_pages_pdf(nom):
+    chemin = chemin_document(nom)
+    if not nom.lower().endswith(".pdf") or not os.path.exists(chemin):
+        return 0
+    import fitz
+    doc = fitz.open(chemin)
+    n = doc.page_count
+    doc.close()
+    return n
+
+
+def image_page_pdf(nom, numero):
+    """Rend une page de PDF en image PNG (numero commence à 1)."""
+    chemin = chemin_document(nom)
+    import fitz
+    doc = fitz.open(chemin)
+    if numero < 1 or numero > doc.page_count:
+        doc.close()
+        return None
+    page = doc.load_page(numero - 1)
+    pix = page.get_pixmap(dpi=110)
+    octets = pix.tobytes("png")
+    doc.close()
+    return octets
+
+
+def texte_pages(nom):
+    """Relit le document déposé et retourne ses pages de texte."""
+    chemin = chemin_document(nom)
+    if not os.path.exists(chemin):
+        return []
+    with open(chemin, "rb") as f:
+        return extraire_pages(nom, f.read())
